@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gesture 21 Elimination Challenge</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Rajdhani:wght@600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- MediaPipe Hands & Camera Utils CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="game-wrapper">
+        <!-- Header -->
+        <header class="game-header">
+            <div class="logo-badge">
+                <span class="icon">🖐️</span>
+                <h1>GESTURE 21 <span class="tag">ELIMINATION</span></h1>
+            </div>
+            <p class="rule-hint">Aturan: Angkat 1, 2, atau 3 jari. Siapa yang mencapai atau melewati <strong>21</strong>
+                = <strong>KALAH!</strong></p>
+        </header>
+
+        <!-- Main Game Board -->
+        <main class="game-grid">
+            <!-- Left / Player 1 Panel -->
+            <section class="player-card player-1" id="card-p1">
+                <div class="player-header">
+                    <div class="avatar p1-avatar">P1</div>
+                    <div class="player-info">
+                        <h2>PLAYER 1</h2>
+                        <span class="role-badge">Challenger</span>
+                    </div>
+                </div>
+                <div class="turn-indicator" id="indicator-p1">GILIRAN ANDA <span class="timer-badge"
+                        id="timer-p1">(5s)</span></div>
+            </section>
+
+            <!-- Center Score Core -->
+            <section class="score-core" id="score-core">
+                <div class="core-rings">
+                    <div class="ring outer-ring"></div>
+                    <div class="ring inner-ring"></div>
+                </div>
+                <div class="score-display">
+                    <span class="score-label">TOTAL ANGKA</span>
+                    <div class="score-number" id="current-score">0</div>
+                    <div class="target-limit">BATAS MAKSIMAL: <strong>21</strong></div>
+                </div>
+                <div class="danger-meter">
+                    <div class="meter-bar" id="danger-bar" style="width: 0%;"></div>
+                </div>
+            </section>
+
+            <!-- Right / Player 2 Panel -->
+            <section class="player-card player-2" id="card-p2">
+                <div class="player-header">
+                    <div class="avatar p2-avatar">P2</div>
+                    <div class="player-info">
+                        <h2>PLAYER 2</h2>
+                        <span class="role-badge">Defender</span>
+                    </div>
+                </div>
+                <div class="turn-indicator" id="indicator-p2">MENUNGGU <span class="timer-badge"
+                        id="timer-p2">(5s)</span>
+                </div>
+            </section>
+        </main>
+
+        <!-- Camera & Gesture Detection Section -->
+        <section class="camera-stage">
+            <div class="camera-viewport">
+                <!-- Video hidden/stream source -->
+                <video id="webcam" playsinline autoplay muted></video>
+                <!-- Canvas for hand overlay & landmark tracking -->
+                <canvas id="output-canvas"></canvas>
+
+                <!-- Viewport HUD Overlay -->
+                <div class="camera-hud">
+                    <div class="camera-status" id="cam-status">
+                        <span class="status-dot"></span> Inisialisasi Kamera...
+                    </div>
+                    <div class="finger-preview" id="finger-preview">
+                        <div class="detected-badge">Terdeteksi: <span id="detected-count">-</span> Jari</div>
+                    </div>
+                </div>
+
+                <!-- Hold-to-Confirm Circular / Linear Progress Bar -->
+                <div class="gesture-confirmation" id="gesture-confirm-box">
+                    <div class="confirm-text" id="confirm-text">Tahan gestur untuk konfirmasi...</div>
+                    <div class="confirm-progress-track">
+                        <div class="confirm-progress-fill" id="confirm-bar"></div>
+                    </div>
+                </div>
+
+                <!-- Camera fallback / grant permission overlay -->
+                <div class="camera-prompt" id="cam-prompt" style="display: none;">
+                    <p>Kamera belum aktif. Klik tombol di bawah untuk mengizinkan akses webcam.</p>
+                    <button id="btn-start-camera" class="btn-primary">Aktifkan Kamera</button>
+                </div>
+            </div>
+
+            <!-- Manual Fallback Controls (Jika kamera redup/trouble) -->
+            <div class="manual-controls">
+                <span class="manual-title">Kontrol Alternatif / Manual Tap:</span>
+                <div class="btn-group">
+                    <button class="btn-add" data-val="1">+1 Jari</button>
+                    <button class="btn-add" data-val="2">+2 Jari</button>
+                    <button class="btn-add" data-val="3">+3 Jari</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Turn History Log -->
+        <section class="log-section">
+            <div class="log-header">
+                <h3>📜 Riwayat Langkah</h3>
+                <button id="btn-reset-game" class="btn-outline-sm">Mulai Ulang Game</button>
+            </div>
+            <div class="log-list" id="turn-logs">
+                <div class="log-item initial">Game dimulai! Total angka: 0. Giliran Player 1.</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal Pause Permainan -->
+    <div class="modal-backdrop" id="pause-modal" style="display: none;">
+        <div class="modal-box pause-box">
+            <div class="modal-icon">⏸️</div>
+            <h2 class="modal-title" style="color: var(--accent-gold);">GAME DIJEDA</h2>
+            <p class="loser-text">Kedua pemain tidak merespon selama 5 detik!</p>
+            <button class="btn-primary" id="btn-resume-game">LANJUTKAN PERMAINAN</button>
+        </div>
+    </div>
+
+    <!-- Modal Game Over -->
+    <div class="modal-backdrop" id="game-over-modal" style="display: none;">
+        <div class="modal-box">
+            <div class="modal-icon" id="modal-icon">💀</div>
+            <h2 class="modal-title" id="modal-title">GAME OVER!</h2>
+            <div class="modal-body" id="modal-body">
+                <p class="loser-text"><span id="loser-name">Player 1</span> mencapai <strong
+                        id="final-score">21</strong>!</p>
+                <div class="winner-banner">
+                    🏆 PEMENANG: <span id="winner-name">PLAYER 2</span> 🏆
+                </div>
+            </div>
+            <button class="btn-restart" id="btn-modal-restart">MAIN LAGI SEKARANG</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+
+</html>
